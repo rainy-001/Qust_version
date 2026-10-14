@@ -3,7 +3,7 @@
 #include "motor/rm_motor/rm_motor.hpp"
 
 sp::CAN can1(&hcan1);
-sp::RM_Motor motor6020(1, sp::RM_Motors::GM6020);  // 一个电机ID为1, 电流控制模式的6020
+sp::RM_Motor motor6020(1, sp::RM_Motors::GM6020_V);  // 一个电机ID为1, 电压控制模式的6020
 
 extern "C" void can_task(void const * argument)
 {
@@ -11,7 +11,7 @@ extern "C" void can_task(void const * argument)
   can1.start();
 
   while (true) {
-    motor6020.cmd(0.5f);  // 调整为0.1f, 电机会旋转, 注意安全
+    motor6020.cmd(3.0f);  // 电压指令, 单位V; 先用较小电压测试, 注意安全
 
     motor6020.write(can1.tx_data);
     can1.send(motor6020.tx_id);
