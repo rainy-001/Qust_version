@@ -52,7 +52,13 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
  applications/led_task.cpp # <- 添加这一行
     sp_middleware/io/led/led.cpp # <- 添加这一行
 
-    
+ applications/vision/vision_task.cpp # <- 上位机 USB 虚拟串口协议
+    sp_middleware/tools/crc/crc.cpp # <- CRC16 校验
+
+ applications/usb_device/usbd_conf.c # <- USB OTG FS 低层驱动
+ applications/usb_device/usbd_desc.c # <- USB 设备描述符
+ applications/usb_device/usbd_cdc_if.c # <- USB CDC 收发接口
+
     # Add user sources here
 )
 
@@ -60,6 +66,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
     sp_middleware/
+    applications/usb_device/
+    applications/vision/
     # Add user defined include paths
 )
 

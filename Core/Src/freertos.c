@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "vision_link.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,6 +50,7 @@
 osThreadId defaultTaskHandle;
 osThreadId LEDHandle;
 osThreadId CANHandle;
+osThreadId VISIONHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -59,6 +60,7 @@ osThreadId CANHandle;
 void StartDefaultTask(void const * argument);
 void led_task(void const * argument);
 void can_task(void const * argument);
+void vision_task(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -116,6 +118,13 @@ void MX_FREERTOS_Init(void) {
   /* definition and creation of CAN */
   osThreadDef(CAN, can_task, osPriorityHigh, 0, 128);
   CANHandle = osThreadCreate(osThread(CAN), NULL);
+
+  /* definition and creation of VISION: USB virtual COM port link.
+     256 words (1 KiB) because the parser pulls in memcpy/memmove and the
+     CRC16 table lookup. osPriorityAboveNormal keeps the ~100 Hz telemetry and
+     the command parser ahead of the LED task without pre-empting CAN. */
+  osThreadDef(VISION, vision_task, osPriorityAboveNormal, 0, 256);
+  VISIONHandle = osThreadCreate(osThread(VISION), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
