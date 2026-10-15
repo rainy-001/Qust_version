@@ -47,18 +47,24 @@
 /* USER CODE BEGIN Variables */
 
 /* USER CODE END Variables */
-osThreadId defaultTaskHandle;
 osThreadId LEDHandle;
+osThreadId IMUHandle;
 osThreadId CANHandle;
+osThreadId DBUSHandle;
+osThreadId BUZZERHandle;
+osThreadId ADCHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 
 /* USER CODE END FunctionPrototypes */
 
-void StartDefaultTask(void const * argument);
 void led_task(void const * argument);
+void imu_task(void const * argument);
 void can_task(void const * argument);
+void uart_task(void const * argument);
+void buzzer_task(void const * argument);
+void adc_task(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -105,40 +111,34 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
-  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
-
   /* definition and creation of LED */
   osThreadDef(LED, led_task, osPriorityLow, 0, 128);
   LEDHandle = osThreadCreate(osThread(LED), NULL);
+
+  /* definition and creation of IMU */
+  osThreadDef(IMU, imu_task, osPriorityBelowNormal, 0, 256);
+  IMUHandle = osThreadCreate(osThread(IMU), NULL);
 
   /* definition and creation of CAN */
   osThreadDef(CAN, can_task, osPriorityHigh, 0, 128);
   CANHandle = osThreadCreate(osThread(CAN), NULL);
 
+  /* definition and creation of DBUS */
+  osThreadDef(DBUS, uart_task, osPriorityRealtime, 0, 256);
+  DBUSHandle = osThreadCreate(osThread(DBUS), NULL);
+
+  /* definition and creation of BUZZER */
+  osThreadDef(BUZZER, buzzer_task, osPriorityAboveNormal, 0, 128);
+  BUZZERHandle = osThreadCreate(osThread(BUZZER), NULL);
+
+  /* definition and creation of ADC */
+  osThreadDef(ADC, adc_task, osPriorityAboveNormal, 0, 128);
+  ADCHandle = osThreadCreate(osThread(ADC), NULL);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
 
-}
-
-/* USER CODE BEGIN Header_StartDefaultTask */
-/**
-  * @brief  Function implementing the defaultTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void const * argument)
-{
-  /* USER CODE BEGIN StartDefaultTask */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END StartDefaultTask */
 }
 
 /* USER CODE BEGIN Header_led_task */
@@ -159,6 +159,24 @@ __weak void led_task(void const * argument)
   /* USER CODE END led_task */
 }
 
+/* USER CODE BEGIN Header_imu_task */
+/**
+* @brief Function implementing the IMU thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_imu_task */
+__weak void imu_task(void const * argument)
+{
+  /* USER CODE BEGIN imu_task */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END imu_task */
+}
+
 /* USER CODE BEGIN Header_can_task */
 /**
 * @brief Function implementing the CAN thread.
@@ -175,6 +193,60 @@ __weak void can_task(void const * argument)
     osDelay(1);
   }
   /* USER CODE END can_task */
+}
+
+/* USER CODE BEGIN Header_uart_task */
+/**
+* @brief Function implementing the DBUS thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_uart_task */
+__weak void uart_task(void const * argument)
+{
+  /* USER CODE BEGIN uart_task */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END uart_task */
+}
+
+/* USER CODE BEGIN Header_buzzer_task */
+/**
+* @brief Function implementing the BUZZER thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_buzzer_task */
+__weak void buzzer_task(void const * argument)
+{
+  /* USER CODE BEGIN buzzer_task */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END buzzer_task */
+}
+
+/* USER CODE BEGIN Header_adc_task */
+/**
+* @brief Function implementing the ADC thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_adc_task */
+__weak void adc_task(void const * argument)
+{
+  /* USER CODE BEGIN adc_task */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END adc_task */
 }
 
 /* Private application code --------------------------------------------------*/
