@@ -1,0 +1,64 @@
+﻿[1/26] Building CXX object CMakeFiles/Qust_version.dir/applications/vision_task.cpp.obj
+FAILED: [code=1] CMakeFiles/Qust_version.dir/applications/vision_task.cpp.obj 
+D:\xpack-arm-none-eabi-gcc-15.2.1-1.1-win32-x64\xpack-arm-none-eabi-gcc-15.2.1-1.1\bin\arm-none-eabi-g++.exe -DDEBUG -DSTM32F407xx -DUSE_HAL_DRIVER -ID:/RoboMaster/Qust_version/sp_middleware -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Core/Inc -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Middlewares/Third_Party/FreeRTOS/Source/include -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Drivers/CMSIS/Include -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -fno-rtti -fno-exceptions -fno-threadsafe-statics -O0 -g3 -MD -MT CMakeFiles/Qust_version.dir/applications/vision_task.cpp.obj -MF CMakeFiles\Qust_version.dir\applications\vision_task.cpp.obj.d -o CMakeFiles/Qust_version.dir/applications/vision_task.cpp.obj -c D:/RoboMaster/Qust_version/applications/vision_task.cpp
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:24:1: error: stray '`' in program
+   24 | ```
+      | ^
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:24:2: error: stray '`' in program
+   24 | ```
+      |  ^
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:24:3: error: stray '`' in program
+   24 | ```
+      |   ^
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:27:20: error: stray '`' in program
+   27 |   usbd_cdc_if.c中的`CDC_Receive_FS`函数
+      |                    ^
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:27:35: error: stray '`' in program
+   27 |   usbd_cdc_if.c中的`CDC_Receive_FS`函数
+      |                                   ^
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:28:1: error: stray '`' in program
+   28 | ```c++ static int8_t CDC_Receive_FS(uint8_t * Buf, uint32_t * Len)
+      | ^
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:28:2: error: stray '`' in program
+   28 | ```c++ static int8_t CDC_Receive_FS(uint8_t * Buf, uint32_t * Len)
+      |  ^
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:28:3: error: stray '`' in program
+   28 | ```c++ static int8_t CDC_Receive_FS(uint8_t * Buf, uint32_t * Len)
+      |   ^
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:7:28: error: no matching function for call to 'sp::Vision::Vision(bool, bool)'
+    7 | sp::Vision vis(false, false);
+      |                            ^
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:7:28: note: there are 3 candidates
+In file included from D:/RoboMaster/Qust_version/applications/vision_task.cpp:2:
+D:/RoboMaster/Qust_version/sp_middleware/io/vision/vision.hpp:75:7: note: candidate 1: 'sp::Vision::Vision()'
+   75 | class Vision
+      |       ^~~~~~
+D:/RoboMaster/Qust_version/sp_middleware/io/vision/vision.hpp:75:7: note: candidate expects 0 arguments, 2 provided
+D:/RoboMaster/Qust_version/sp_middleware/io/vision/vision.hpp:75:7: note: candidate 2: 'constexpr sp::Vision::Vision(const sp::Vision&)'
+D:/RoboMaster/Qust_version/sp_middleware/io/vision/vision.hpp:75:7: note: candidate expects 1 argument, 2 provided
+D:/RoboMaster/Qust_version/sp_middleware/io/vision/vision.hpp:75:7: note: candidate 3: 'constexpr sp::Vision::Vision(sp::Vision&&)'
+D:/RoboMaster/Qust_version/sp_middleware/io/vision/vision.hpp:75:7: note: candidate expects 1 argument, 2 provided
+D:/RoboMaster/Qust_version/applications/vision_task.cpp: In function 'void vision_task()':
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:14:69: error: 'supercap' was not declared in this scope
+   14 |       0, imu.q, imu.yaw, imu.vyaw, imu.pitch, imu.vpitch, 24.0f, 0, supercap.power_in,
+      |                                                                     ^~~~~~~~
+D:/RoboMaster/Qust_version/applications/vision_task.cpp: At global scope:
+D:/RoboMaster/Qust_version/applications/vision_task.cpp:26:3: error: '\U00004fee\U00006539Src' does not name a type
+   26 |   修改Src /
+      |   ^~~~~~~
+[2/26] Building CXX object CMakeFiles/Qust_version.dir/sp_middleware/io/vision/vision.cpp.obj
+FAILED: [code=1] CMakeFiles/Qust_version.dir/sp_middleware/io/vision/vision.cpp.obj 
+D:\xpack-arm-none-eabi-gcc-15.2.1-1.1-win32-x64\xpack-arm-none-eabi-gcc-15.2.1-1.1\bin\arm-none-eabi-g++.exe -DDEBUG -DSTM32F407xx -DUSE_HAL_DRIVER -ID:/RoboMaster/Qust_version/sp_middleware -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Core/Inc -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Middlewares/Third_Party/FreeRTOS/Source/include -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Drivers/CMSIS/Device/ST/STM32F4xx/Include -ID:/RoboMaster/Qust_version/cmake/stm32cubemx/../../Drivers/CMSIS/Include -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -fno-rtti -fno-exceptions -fno-threadsafe-statics -O0 -g3 -MD -MT CMakeFiles/Qust_version.dir/sp_middleware/io/vision/vision.cpp.obj -MF CMakeFiles\Qust_version.dir\sp_middleware\io\vision\vision.cpp.obj.d -o CMakeFiles/Qust_version.dir/sp_middleware/io/vision/vision.cpp.obj -c D:/RoboMaster/Qust_version/sp_middleware/io/vision/vision.cpp
+D:/RoboMaster/Qust_version/sp_middleware/io/vision/vision.cpp:8:10: fatal error: usbd_cdc_if.h: No such file or directory
+    8 | #include "usbd_cdc_if.h"
+      |          ^~~~~~~~~~~~~~~
+compilation terminated.
+[3/26] Building C object cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c.obj
+[4/26] Building C object cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c.obj
+[5/26] Building C object cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c.obj
+[6/26] Building C object cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c.obj
+[7/26] Building C object cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c.obj
+[8/26] Building C object cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c.obj
+[9/26] Building C object cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c.obj
+[10/26] Building C object cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir/__/__/Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c.obj
+ninja: build stopped: subcommand failed.
