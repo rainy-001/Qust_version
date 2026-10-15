@@ -11,7 +11,7 @@ extern "C" void can_task(void const * argument)
   can1.start();
 
   while (true) {
-    motor6020.cmd(3.0f);  // 电压指令, 单位V; 先用较小电压测试, 注意安全
+    motor6020.cmd(0.0f);  // 电压指令, 单位V; 先用较小电压测试, 注意安全
 
     motor6020.write(can1.tx_data);
     can1.send(motor6020.tx_id);
