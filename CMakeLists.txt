@@ -52,6 +52,15 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
  applications/led_task.cpp # <- 添加这一行
     sp_middleware/io/led/led.cpp # <- 添加这一行
 
+        applications/voltage_detect.cpp # <- 添加这一行
+    sp_middleware/io/adc/adc.cpp # <- 添加这一行
+
+       applications/buzzer_task.cpp # <- 添加这一行
+    sp_middleware/io/buzzer/buzzer.cpp # <- 添加这一行
+
+      applications/uart_task.cpp # <- 添加这一行
+    sp_middleware/io/dbus/dbus.cpp # <- 添加这一行
+
  applications/vision/vision_task.cpp # <- 上位机 USB 虚拟串口协议
     sp_middleware/tools/crc/crc.cpp # <- CRC16 校验
 

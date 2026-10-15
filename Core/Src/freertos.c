@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "vision_link.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,7 +50,10 @@
 osThreadId defaultTaskHandle;
 osThreadId LEDHandle;
 osThreadId CANHandle;
+osThreadId ADC_taskHandle;
 osThreadId VISIONHandle;
+osThreadId BUZZERHandle;
+osThreadId UARTHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -60,7 +63,10 @@ osThreadId VISIONHandle;
 void StartDefaultTask(void const * argument);
 void led_task(void const * argument);
 void can_task(void const * argument);
+void adc_task(void const * argument);
 void vision_task(void const * argument);
+void buzzer_task(void const * argument);
+void uart_task(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -119,12 +125,26 @@ void MX_FREERTOS_Init(void) {
   osThreadDef(CAN, can_task, osPriorityHigh, 0, 128);
   CANHandle = osThreadCreate(osThread(CAN), NULL);
 
+  /* definition and creation of ADC_task */
+  osThreadDef(ADC_task, adc_task, osPriorityLow, 0, 256);
+  ADC_taskHandle = osThreadCreate(osThread(ADC_task), NULL);
+
   /* definition and creation of VISION: USB virtual COM port link.
-     256 words (1 KiB) because the parser pulls in memcpy/memmove and the
-     CRC16 table lookup. osPriorityAboveNormal keeps the ~100 Hz telemetry and
-     the command parser ahead of the LED task without pre-empting CAN. */
-  osThreadDef(VISION, vision_task, osPriorityAboveNormal, 0, 256);
+     512 words (2 KiB) because the parser pulls in memcpy/memmove and the CRC16
+     table lookup. osPriorityAboveNormal keeps the ~100 Hz telemetry and the
+     command parser ahead of the LED/ADC tasks without pre-empting CAN. */
+  osThreadDef(VISION, vision_task, osPriorityAboveNormal, 0, 512);
   VISIONHandle = osThreadCreate(osThread(VISION), NULL);
+
+  /* definition and creation of BUZZER */
+  osThreadDef(BUZZER, buzzer_task, osPriorityLow, 0, 128);
+  BUZZERHandle = osThreadCreate(osThread(BUZZER), NULL);
+
+  /* definition and creation of UART: DBus remote receiver. It only arms the
+     DMA reception and then idles; the actual decoding happens in
+     HAL_UARTEx_RxEventCallback. */
+  osThreadDef(UART, uart_task, osPriorityNormal, 0, 128);
+  UARTHandle = osThreadCreate(osThread(UART), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -168,22 +188,22 @@ __weak void led_task(void const * argument)
   /* USER CODE END led_task */
 }
 
-/* USER CODE BEGIN Header_can_task */
+/* USER CODE BEGIN Header_adc_task */
 /**
-* @brief Function implementing the CAN thread.
+* @brief Function implementing the ADC_task thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_can_task */
-__weak void can_task(void const * argument)
+/* USER CODE END Header_adc_task */
+__weak void adc_task(void const * argument)
 {
-  /* USER CODE BEGIN can_task */
+  /* USER CODE BEGIN adc_task */
   /* Infinite loop */
   for(;;)
   {
     osDelay(1);
   }
-  /* USER CODE END can_task */
+  /* USER CODE END adc_task */
 }
 
 /* Private application code --------------------------------------------------*/
