@@ -1,6 +1,26 @@
+// [解析] ==========================================================================
+// [解析] 【文件】sp_middleware/tools/crc/crc.cpp
+// [解析] 【作用】CRC 校验的具体实现：算校验值、校验整帧、把校验值补到帧尾。
+// [解析]         通信时数据可能被电机、电调等干扰，加一段校验码就能发现"这包数据坏了"。
+// [解析] 【被谁用】referee/vt03/vt03.cpp、referee/vt02/vt02.cpp、referee/pm02/pm02.cpp、
+// [解析]         referee/ui/manager.cpp、io/vision/vision.cpp（收发一帧前后各调一次）。
+// [解析] 【看代码的重点】1) "查表法"到底在查什么（表里的 256 个常量是提前算好的）；
+// [解析]   2) CRC8 和 CRC16 的算法差别（查表时异或的高低位不同）；
+// [解析]   3) check_xxx 里 len 的含义：CRC8 的 len 含校验字节，CRC16 的 len 含 2 个校验字节。
+// [解析] ==========================================================================
+
 #include "crc.hpp"
 
+// [解析] CRC8 的初始值，固定为 0xFF（不是 0）。收发双方的初值必须一样，
+// [解析] 所以这个数字不能随便改，改了对方就算不出相同的校验值。
 constexpr uint8_t CRC8_INIT = 0xff;
+// [解析] 256 项查找表：正常 CRC 要逐位做 8 次"移位 + 异或"，很慢；
+// [解析] 这里把"一个字节 0x00~0xFF 全部 8 轮的结果"提前算好存成常量表，
+// [解析] 运行时一个字节只需要查一次表，速度大约快 8 倍。
+// [解析] 本表对应：多项式 0x31（反射形式 0x8C）、初值 0xFF、结果不取反，
+// [解析] 也就是 RoboMaster 裁判系统手册里那张官方表（CRC-8/MAXIM 的变体）。
+// [解析] 注意：它属于"低位在前/右移"风格的算法（看下面 get_crc8 的查表方式），
+// [解析] 网上很多 CRC8 表是"高位移位"风格的，数值完全对不上，两者不能混用。
 const uint8_t CRC8_TABLE[256] = {
   0x00, 0x5e, 0xbc, 0xe2, 0x61, 0x3f, 0xdd, 0x83, 0xc2, 0x9c, 0x7e, 0x20, 0xa3, 0xfd, 0x1f, 0x41,
   0x9d, 0xc3, 0x21, 0x7f, 0xfc, 0xa2, 0x40, 0x1e, 0x5f, 0x01, 0xe3, 0xbd, 0x3e, 0x60, 0x82, 0xdc,
@@ -20,7 +40,12 @@ const uint8_t CRC8_TABLE[256] = {
   0x74, 0x2a, 0xc8, 0x96, 0x15, 0x4b, 0xa9, 0xf7, 0xb6, 0xe8, 0x0a, 0x54, 0xd7, 0x89, 0x6b, 0x35,
 };
 
+// [解析] CRC16 的初始值，固定为 0xFFFF。
 constexpr uint16_t CRC16_INIT = 0xffff;
+// [解析] CRC16 的 256 项查找表。对应：多项式 0x1021（反射形式 0x8408）、初值 0xFFFF、
+// [解析] 输入和输出都反射、结果不取反 —— 也就是 CRC-16/MCRF4XX，
+// [解析] 裁判系统协议和视觉通信协议用的都是这一套（见 vision.cpp 的 get_crc16 调用）。
+// [解析] 校验/写入时按"低字节在前"处理（见下面的 check_crc16 与 append_crc16）。
 const uint16_t CRC16_TABLE[256] = {
   0x0000, 0x1189, 0x2312, 0x329b, 0x4624, 0x57ad, 0x6536, 0x74bf, 0x8c48, 0x9dc1, 0xaf5a, 0xbed3,
   0xca6c, 0xdbe5, 0xe97e, 0xf8f7, 0x1081, 0x0108, 0x3393, 0x221a, 0x56a5, 0x472c, 0x75b7, 0x643e,
@@ -47,26 +72,48 @@ const uint16_t CRC16_TABLE[256] = {
 
 namespace sp
 {
+// [解析] 计算一段数据的 CRC8，返回值就是校验码。
+// [解析] 参数 data：数据首地址（可以强转结构体指针传进来，见 vt03.cpp）
+// [解析] 参数 len ：参与计算的字节个数，uint16_t，范围 0~65535；不包含校验字节本身。
+// [解析] 返回：8 位校验值（0x00~0xFF）
+// [解析] 副作用：没有，data 只读，不会改动你的数据。
 uint8_t get_crc8(const uint8_t * data, uint16_t len)
 {
+  // [解析] crc8 是"滚动"的中间结果：每处理一个字节就更新一次，全部处理完就是校验值。
   uint8_t crc8 = CRC8_INIT;
   uint8_t byte;
   uint8_t i;
 
+  // [解析] while (len--) 是嵌入式中常见的倒着数循环：
+  // [解析]   先判断 len 是否为 0，再让 len 自减 1（所以循环体里的 len 已经是"剩余-1"）。
   while (len--) {
+    // [解析] *data++ 的写法：先取当前字节，再把指针往后挪一个。
     byte = *data++;
+    // [解析] 查表法的核心就这一行：把"当前 CRC"和"新字节"做异或，
+    // [解析] 用得到的 0~255 去查表，查出来的值就是新的 CRC。
+    // [解析] 这一步等价于原来的 8 轮逐位移位异或，只是结果被提前算在表里了。
     i = crc8 ^ byte;
     crc8 = CRC8_TABLE[i];
   }
 
+  // [解析] 数据全部过完，返回最终校验值。
   return crc8;
 }
 
+// [解析] 校验一帧自带的 CRC8 是否正确（用于接收侧判断"这包数据能不能用"）。
+// [解析] 参数 len：整帧长度，包含最后那个 CRC8 字节（所以比 get_crc8 的 len 多 1）。
+// [解析] 做法：把前 len-1 个字节重新算一遍 CRC8，和第 len 个字节 data[len-1] 比对。
+// [解析] 返回：true = 数据完好；false = 数据被干扰了，调用者应当丢弃整帧。
+// [解析] 注意：len 必须 ≥ 1。传 0 时 len-1 会变成 -1（先提升为 int 再转回 uint32/uint16），
+// [解析]   结果是一次严重越界读，可能直接 HardFault，所以调用前一定要判断长度合法。
 bool check_crc8(const uint8_t * data, uint16_t len)
 {
   return get_crc8(data, len - 1) == data[len - 1];
 }
 
+// [解析] 计算一段数据的 CRC16，返回 16 位校验值。
+// [解析] 参数 len：参与计算的字节个数（uint32_t）；不包含校验字节本身。
+// [解析] 用法见 vision.cpp：crc16 = get_crc16(数据首地址, 整帧长度 - 2)。
 uint16_t get_crc16(const uint8_t * data, uint32_t len)
 {
   uint16_t crc16 = CRC16_INIT;
@@ -75,6 +122,10 @@ uint16_t get_crc16(const uint8_t * data, uint32_t len)
 
   while (len--) {
     byte = *data++;
+    // [解析] 与 CRC8 的差别全在这两行：
+    // [解析]   1) 只拿 CRC 的"低 8 位"去和新字节异或（所以用 & 0x00ff 把高位清掉）；
+    // [解析]   2) 更新时先把 CRC 右移 8 位，再异或查表结果 —— 这是"反射型"CRC16 的标准写法。
+    // [解析]   顺序不能颠倒，否则算出来的校验值和协议对不上。
     i = (crc16 ^ byte) & 0x00ff;
     crc16 = (crc16 >> 8) ^ CRC16_TABLE[i];
   }
@@ -82,17 +133,32 @@ uint16_t get_crc16(const uint8_t * data, uint32_t len)
   return crc16;
 }
 
+// [解析] 校验一帧自带的 CRC16 是否正确。
+// [解析] 参数 len：整帧长度，包含末尾 2 个 CRC 字节。
+// [解析] 重要：本项目约定 CRC16 "低字节在前"：data[len-2] 是低 8 位、data[len-1] 是高 8 位，
+// [解析]   所以这里用 (data[len-1] << 8) | data[len-2] 把两个字节拼回一个 16 位数。
+// [解析]   这个顺序必须和发送方 append_crc16() 完全一致，也必须和视觉/裁判协议一致。
+// [解析] 注意：len 必须 ≥ 2，否则 data[len-2] 会读到帧外。
 bool check_crc16(const uint8_t * data, uint32_t len)
 {
   uint16_t crc16 = (data[len - 1] << 8) | data[len - 2];
   return get_crc16(data, len - 2) == crc16;
 }
 
+// [解析] 把 CRC8 写进缓冲区最后一个字节（发送前调用，见 vt03.cpp 的 "一步追加 CRC8"）。
+// [解析] 参数 len：整帧长度，包含 CRC8 自己占的 1 个字节。
+// [解析] 副作用：原地修改 data[len-1]！
+// [解析] 注意：它是"覆盖"而不是"追加"，调用前必须保证缓冲区末尾已经预留好 1 个字节的位置。
 void append_crc8(uint8_t * data, uint16_t len)
 {
   data[len - 1] = get_crc8(data, len - 1);
 }
 
+// [解析] 把 CRC16 写进缓冲区最后 2 个字节（发送前调用，见 vt03.cpp 的 "优雅地一步追加 CRC16"）。
+// [解析] 参数 len：整帧长度，包含 CRC16 占的 2 个字节。
+// [解析] 拆字节靠位运算：& 0x00ff 取低 8 位，(crc16 >> 8) 取高 8 位。
+// [解析] 存的时候低字节放在前面（data[len-2]），和 check_crc16 的读取顺序正好对应。
+// [解析] 副作用：原地修改 data[len-2] 和 data[len-1]，同样是"覆盖"不是"追加"。
 void append_crc16(uint8_t * data, uint32_t len)
 {
   uint16_t crc16 = get_crc16(data, len - 2);

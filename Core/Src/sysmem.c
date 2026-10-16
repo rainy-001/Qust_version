@@ -19,8 +19,33 @@
  *
  ******************************************************************************
  */
+// [解析] ==========================================================================
+// [解析] 【文件】Core/Src/sysmem.c
+// [解析] 【作用】给 C 标准库提供"堆(heap)从哪里开始长、最多能长到哪儿"这一个函数 _sbrk()。
+// [解析]         malloc / calloc / free / new 最终都要依赖它；没有它，malloc 就无法工作。
+// [解析]         它自己不管理内存块，只负责"向系统要一大片空地"，真正切块分配的是 malloc。
+// [解析] 【谁生成】STM32CubeMX 自动生成，作者没有改动过。
+// [解析]         本文件里没有任何 /* USER CODE BEGIN */ 保护区，所以在 CubeMX 里点
+// [解析]         GENERATE CODE 时这个文件会被整份重新生成覆盖，改了也白改。
+// [解析] 【关键点】1) 堆是"从 _end 往上长"的：_end 是链接脚本里 .bss 段结束的地址，
+// [解析]              也就是全局变量、静态变量占完之后的第一块空闲 RAM 才归 malloc 用。
+// [解析]           2) 堆的上限被 MSP 栈挡住：栈从 RAM 最高地址往下长，
+// [解析]              链接脚本用 _Min_Stack_Size 给它预留了一块地方，堆不能越过这条线。
+// [解析]           3) 本工程链接脚本 STM32F407xx_FLASH.ld 里的实际数值：
+// [解析]              RAM 从 0x20000000 开始共 128K，所以 _estack = 0x20020000（RAM 末尾）；
+// [解析]              _Min_Heap_Size = 0x200（512 字节），_Min_Stack_Size = 0x400（1KB）。
+// [解析]              注意：这个 0x400 只是"链接时检查有没有地方放"的预留量，
+// [解析]              并不是运行时的硬件保护。栈真用超了照样会踩坏堆或别的变量，
+// [解析]              而且往往表现为"莫名其妙的变量被改"，非常难查。栈别开太大。
+// [解析]           4) 这里管的是 C 库的堆；FreeRTOS 的 pvPortMalloc 用的是另外一块
+// [解析]              静态数组（FreeRTOSConfig.h 里 configTOTAL_HEAP_SIZE = 15360 字节，
+// [解析]              分配算法是 heap_4.c）。两块堆互不相干，千万别弄混。
+// [解析] ==========================================================================
 
 /* Includes */
+// [解析] 只需要三个头文件，非常"轻"：errno.h 拿 ENOMEM，stdint.h 拿 uint8_t/uint32_t，
+// [解析]   stddef.h 拿 NULL 和 ptrdiff_t。因为它只干内存管理这一件事。
+
 #include <errno.h>
 #include <stdint.h>
 #include <stddef.h>
@@ -28,6 +53,9 @@
 /**
  * Pointer to the current high watermark of the heap usage
  */
+// [解析] __sbrk_heap_end 是"堆当前用到哪儿了"的水位线（原文 high watermark 就是这个意思）。
+// [解析]   static：只在本文件可见，别的文件看不到也不会冲突。
+// [解析]   初值 NULL 表示"还没开始用堆"，等到第一次调用 _sbrk() 时才把它定位到 _end。
 static uint8_t *__sbrk_heap_end = NULL;
 
 /**
@@ -51,28 +79,69 @@ static uint8_t *__sbrk_heap_end = NULL;
  * @param incr Memory size
  * @return Pointer to allocated memory
  */
+// [解析] _sbrk() 是 sbrk 的"带下划线版本"。newlib 里的 malloc 发现手头没有空闲块时，
+// [解析]   就会调用它"再向系统要 incr 个字节"。
+// [解析] 参数 incr：本次要新增的字节数。单位是字节；理论上可以是负数（表示归还内存），
+// [解析]   不过标准库的 malloc 基本只会传正数。
+// [解析] 返回值：成功时返回"这次新增区域的起始地址"（注意是旧的水位线，不是加了之后的！）；
+// [解析]   失败时返回 (void *)-1 并把 errno 设成 ENOMEM（内存不足）。
+// [解析]   malloc 看到 -1 就知道要不到内存，于是给你返回 NULL —— 所以"malloc 返回 NULL"
+// [解析]   这件事的判定就发生在本函数里。
+// [解析] 上面那段 @verbatim 里的图非常值得记住，它画的是 F407 的 RAM 是怎么切的：
+// [解析]   |  .data  |  .bss  |  newlib 堆 --->        |  <--- MSP 栈  |
+// [解析]   RAM低地址        _end                    _sstack        _estack(RAM末尾)
+// [解析]   堆往高地址长，栈往低地址长，两者相向而行 —— 撞上就叫"堆栈溢出"。
+// [解析] 原文最后那句 NOTE 说的是：如果运行中发现 MSP 栈真的用超了这块预留区，
+// [解析]   就要去链接脚本里把 _Min_Stack_Size 调大（本工程是 0x400 = 1KB）。
 void *_sbrk(ptrdiff_t incr)
 {
+  // [解析] 下面三个 extern 变量不是在本文件定义的，而是链接脚本 STM32F407xx_FLASH.ld
+  // [解析]   里 PROVIDE 出来的"符号"。它们的"地址"才有意义，值本身没人关心，
+  // [解析]   所以下文一律写成 (uint32_t)&_end 这种取地址的形式。
+  // [解析]   _end            ：.bss 段结束，也就是所有全局/静态变量用完之后的第一个空闲地址
+  // [解析]   _estack         ：RAM 的最高地址（Cortex-M 的栈从这个地址往下增长）
+  // [解析]   _Min_Stack_Size ：给 MSP 栈预留的字节数
   extern uint8_t _end; /* Symbol defined in the linker script */
   extern uint8_t _estack; /* Symbol defined in the linker script */
   extern uint32_t _Min_Stack_Size; /* Symbol defined in the linker script */
+  // [解析] stack_limit = 栈顶 - 预留栈大小 = "栈最多能往下长到哪儿"，堆绝对不能超过这条线。
+  // [解析] max_heap 就是这条线，只是转成了字节指针类型，方便和堆指针直接做比较。
+  // [解析] 这里先把地址强转成 uint32_t 再相减：因为 _estack 是"符号地址"、
+  // [解析]   _Min_Stack_Size 是"值(0x400)"，两个不同性质的符号必须先转换类型才能做算术。
   const uint32_t stack_limit = (uint32_t)&_estack - (uint32_t)&_Min_Stack_Size;
   const uint8_t *max_heap = (uint8_t *)stack_limit;
+  // [解析] prev_heap_end：用来记住"加之前"的水位线，函数最后要把它返回给 malloc。
   uint8_t *prev_heap_end;
 
   /* Initialize heap end at first call */
+  // [解析] 懒初始化：第一次调用（水位线还是 NULL）时，把堆的起点定在 _end，
+  // [解析]   也就是 .bss 段结束后的第一个空闲字节，紧挨着全局变量。
+  // [解析] 写法上把常量放左边（NULL == x）是嵌入式/安全编程的习惯：
+  // [解析]   万一手滑少写一个 = 会直接编译报错，而不是变成一句永远成立的赋值语句。
   if (NULL == __sbrk_heap_end)
   {
     __sbrk_heap_end = &_end;
   }
 
   /* Protect heap from growing into the reserved MSP stack */
+  // [解析] 核心的安全检查：这次扩容之后会不会顶穿预留的 MSP 栈？
+  // [解析]   会的话就设 errno = ENOMEM（Error NO MEMory）并返回 (void *)-1，
+  // [解析]   上一层 malloc 收到 -1 就返回 NULL 给调用者。
+  // [解析] 这就是"内存不够时 malloc 返回 NULL 而不是直接把程序搞崩"的原因。
+  // [解析] 也提醒你：malloc 之后一定要判断返回值是不是 NULL！
   if (__sbrk_heap_end + incr > max_heap)
   {
     errno = ENOMEM;
     return (void *)-1;
   }
 
+  // [解析] 三步走：先记下旧水位线 -> 再把水位线抬高 incr -> 最后返回旧水位线。
+  // [解析] 为什么返回"旧的"？因为旧水位线正好就是这块新内存的首地址；
+  // [解析]   抬高之后的新水位线指向的是"这块内存的末尾"，也就是下次再申请的起点。
+  // [解析] 注意本函数自己没有任何加锁。如果在 FreeRTOS 里多个任务同时 malloc，
+  // [解析]   就存在竞争风险（本工程没有实现 __malloc_lock() 这类钩子）；
+  // [解析]   更严重的是在中断里调用 malloc —— 那属于绝对禁止的操作。
+  // [解析] 新手建议：实时任务里尽量用静态数组或 FreeRTOS 的 pvPortMalloc，少用 malloc。
   prev_heap_end = __sbrk_heap_end;
   __sbrk_heap_end += incr;
 
@@ -83,5 +152,9 @@ void *_sbrk(ptrdiff_t incr)
   // Picolibc expects syscalls without the leading underscore.
   // This creates a strong alias so that
   // calls to `sbrk()` are resolved to our `_sbrk()` implementation.
+  // [解析] 这几行只有用 Picolibc 这个精简 C 库编译时才会生效；本工程用的是 newlib
+  // [解析]   （__PICOLIBC__ 没有定义），所以整段会被跳过，不影响功能。
+  // [解析] 原因：newlib 找的是带下划线的 _sbrk()，而 Picolibc 找的是不带下划线的 sbrk()，
+  // [解析]   于是用 __strong_reference 给同一个函数再挂一个名字，两个名字指向同一份代码。
   __strong_reference(_sbrk, sbrk);
 #endif

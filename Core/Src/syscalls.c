@@ -19,8 +19,33 @@
  *
  ******************************************************************************
  */
+// [解析] ==========================================================================
+// [解析] 【文件】Core/Src/syscalls.c
+// [解析] 【作用】给 C 标准库（newlib / Picolibc）"补全底层系统调用"。
+// [解析]         printf / scanf / malloc 这些函数内部并不直接操作硬件，
+// [解析]         而是去调用一组名字带下划线的底层函数（_write、_read、_close ...）。
+// [解析]         单片机上没有操作系统，没人提供这些函数，所以必须由本文件给出"空壳实现"，
+// [解析]         否则链接时会报 undefined reference to `_write' 之类的错误。
+// [解析] 【谁生成】STM32CubeMX 自动生成，作者没有改动过。
+// [解析]         判断依据：整篇没有任何 /* USER CODE BEGIN */ 保护区，
+// [解析]         也就是说在 CubeMX 里点 GENERATE CODE，这个文件会被整份重新覆盖。
+// [解析] 【关键点】1) __io_putchar / __io_getchar 是本文件唯一和硬件沾边的地方：
+// [解析]             本文件只"声明"了它俩，真正的实现要由别的文件提供（见下面 Variables 段）。
+// [解析]           2) 大量函数体是空的或者直接 return -1：这是"故意不支持"，
+// [解析]              表示这块单片机没有文件系统/多进程，标准库问起来就回答"没有"。
+// [解析]           3) _exit() 里是一个 while(1) 死循环：程序走到"正常结束"就在这里停住，
+// [解析]              这是有意为之，不是 bug。
+// [解析]           4) 文件后半段的 #if defined(__PICOLIBC__) 是给 Picolibc 这个 C 库用的。
+// [解析]              本工程用的是 newlib（arm-none-eabi-gcc 默认），所以那段通常不参与编译。
+// [解析] 【新手最该记住的一句话】想让 printf 从串口打印出来，只要在别处实现一个
+// [解析]         int __io_putchar(int ch) 即可，不用（也不能）改这个文件里的代码。
+// [解析] ==========================================================================
 
 /* Includes */
+// [解析] 下面这些头文件（stat.h、errno.h、signal.h、time.h ...）都只是为了拿到
+// [解析]   POSIX 标准里那些结构体和宏的定义（struct stat、errno、EINVAL、ECHILD ...）。
+// [解析]   别误会：包含它们并不代表这块单片机上真有文件系统或信号机制，
+// [解析]   只是"名字必须对得上"，标准库编译时才能通过。
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -32,24 +57,58 @@
 
 
 /* Variables */
+// [解析] 下面两行只是"声明"（extern），没有函数体 —— 实现必须由工程里另一个文件提供。
+// [解析]   __io_putchar(ch)：往串口发 1 个字节，printf 最终会走到这里；
+// [解析]   __io_getchar()  ：从串口收 1 个字节，scanf 最终会走到这里。
+// [解析] __attribute__((weak)) 表示"弱声明"：如果全工程都没有人写出这两个函数的实体，
+// [解析]   链接器就把它们的地址填成 0；万一真的被调用到就会跳到 0 地址，触发 HardFault。
+// [解析] 注意：在整个工程里搜索 __io_putchar / __io_getchar，只能搜到本文件这两行声明，
+// [解析]   并没有找到定义。也就是说当前工程的 printf 其实还没有接到串口上，
+// [解析]   要用 printf 打印调试信息，必须自己补一个实现，例如：
+// [解析]     int __io_putchar(int ch)
+// [解析]     {
+// [解析]       HAL_UART_Transmit(&huart3, (uint8_t *)&ch, 1, 0xFFFF);  // huart3 = USART3
+// [解析]       return ch;
+// [解析]     }
+// [解析]   这段代码要写在带 USER CODE 保护区的文件里（比如 main.c），不要写进本文件。
+// [解析] 注意（对照 docs/C板引脚配置说明.md）：文档登记的"调试串口"是 USART1(PA9/PA10)，
+// [解析]   但当前工程的 Core/Src/usart.c 里只初始化了 huart3（USART3，给 DBus 遥控器用的），
+// [解析]   并不存在 huart1 这个对象。所以上面只能填工程里真实存在的句柄；
+// [解析]   而 huart3 上跑的是 DBus 协议，往上面打印会把遥控数据搅乱，
+// [解析]   正规做法是在 CubeMX 里另配一个串口当调试口，再把它接给 __io_putchar()。
 extern int __io_putchar(int ch) __attribute__((weak));
 extern int __io_getchar(void) __attribute__((weak));
 
 
 char *__env[1] = { 0 };
+// [解析] ↑ __env 是一个"空的环境变量表"，只有一个 0（NULL）用来表示"到此结束"。
+// [解析]   标准库的接口要求必须有 environ 这个符号，所以这里给它一个合法的空表。
+// [解析]   注意数组长度固定为 1，别指望往里面塞东西。
 char **environ = __env;
+// [解析] ↑ environ 就是标准库认识的"环境变量表指针"，指向上面那个空数组。
 
 
 /* Functions */
+// [解析] 空函数。这是 GNU ARM 工具链配合"半主机(semihosting)"在线调试时用的钩子，
+// [解析]   只有在调试器里跑、并且开了 semihosting 才有意义（printf 直接打到电脑上）。
+// [解析]   本工程是脱机运行的机器人，用不到，所以函数体是空的；
+// [解析]   但也不能删掉，否则某些工具链版本会报找不到符号。
 void initialise_monitor_handles()
 {
 }
 
+// [解析] _getpid()：返回"当前进程号"。单片机没有进程的概念，随便返回 1 就行，
+// [解析]   只要不返回负数（负数代表出错）就不会有人来找麻烦。
 int _getpid(void)
 {
   return 1;
 }
 
+// [解析] _kill()：向某个进程发送信号（相当于"通知某个程序去死"）。没有多进程，固定报错。
+// [解析] 参数：pid 进程号、sig 信号编号 —— 本函数两个都不用。
+// [解析] 返回值：-1 表示失败，同时把 errno 设成 EINVAL（Invalid argument，参数非法）。
+// [解析] (void)pid; (void)sig; 是 C 语言里"消除未使用参数警告"的固定写法，
+// [解析]   意思是"我知道有这两个参数，但我故意不用"，不是作者写漏了。
 int _kill(int pid, int sig)
 {
   (void)pid;
@@ -58,12 +117,25 @@ int _kill(int pid, int sig)
   return -1;
 }
 
+// [解析] _exit()：标准库认为"程序要结束了"时会调用它（例如 main 函数 return 了）。
+// [解析] 参数 status 是退出码，单片机没地方交还控制权，所以先调 _kill() 报个错，
+// [解析]   然后 while(1){} 把 CPU 永远停在这里 —— 相当于"卡死等看门狗复位"。
+// [解析] 调试时如果发现程序停在这个死循环里，说明执行流走到了正常的退出路径，
+// [解析]   多半是 main 里 return 了或者某个任务函数返回了，要回上层逻辑去查。
 void _exit (int status)
 {
   _kill(status, -1);
   while (1) {}    /* Make sure we hang here */
 }
 
+// [解析] _read()：标准库的 read() / scanf() 的底层实现 —— "从文件读 len 个字节"。
+// [解析] 单片机上没有文件，这里被简化成"从串口收 len 个字符"：一个字符一个字符地
+// [解析]   调用 __io_getchar()，装进 ptr 指向的缓冲区。
+// [解析] __attribute__((weak))：这里的实现是"弱"的。你可以在自己写的文件里定义一个
+// [解析]   同名的强函数把它盖掉（这就是给你自定义输入留的后门）。
+// [解析] 参数：file 文件描述符（本函数不用它）；ptr 读到的数据往这里放；len 要读多少字节。
+// [解析] 返回值：固定返回 len，表示"要的我都读到了"（并不会报告实际读了多少）。
+// [解析] 注意：它是阻塞的，串口没数据就会一直等，不要在实时控制循环里随便调用。
 __attribute__((weak)) int _read(int file, char *ptr, int len)
 {
   (void)file;
@@ -77,6 +149,14 @@ __attribute__((weak)) int _read(int file, char *ptr, int len)
   return len;
 }
 
+// [解析] _write()：本文件最重要、新手最关心的一个函数！
+// [解析]   调用链是这样的：printf("hello") -> write() -> _write() -> 逐个字符 __io_putchar()。
+// [解析]   换句话说：只要实现了 __io_putchar()，printf 就能输出到你指定的那个串口。
+// [解析] 参数：file 文件描述符（不用）；ptr 要输出的数据首地址；len 一共多少字节。
+// [解析] 返回值：len，告诉标准库"这些字节我都处理完了"，于是标准库不会再重试。
+// [解析] (void)file; 同样是为了消除"参数未使用"的编译警告。
+// [解析] 注意：本函数完全没有互斥保护。多个 FreeRTOS 任务同时 printf，输出会互相穿插错乱，
+// [解析]   工程上常见的做法是给 printf 套一把互斥锁，或者统一交给一个日志任务输出。
 __attribute__((weak)) int _write(int file, char *ptr, int len)
 {
   (void)file;
@@ -89,6 +169,8 @@ __attribute__((weak)) int _write(int file, char *ptr, int len)
   return len;
 }
 
+// [解析] _close()：关闭一个已打开的文件。没有文件系统，直接返回 -1（失败）。
+// [解析] file 是文件描述符，这里用不到。
 int _close(int file)
 {
   (void)file;
@@ -96,6 +178,11 @@ int _close(int file)
 }
 
 
+// [解析] _fstat()：查询文件的状态信息。标准库启动时用它来判断"标准输出是不是终端"。
+// [解析] st->st_mode = S_IFCHR 表示"这是一个字符设备"（串口就属于字符设备），
+// [解析]   这样标准库就知道不能对它做定位、不能缓存整块数据这类花样操作。
+// [解析] 参数：file 描述符（不用）；st 调用者传进来的结构体指针，本函数只填了 st_mode 一个字段。
+// [解析] 返回值 0 表示查询成功（哪怕是"假装"成功）。
 int _fstat(int file, struct stat *st)
 {
   (void)file;
@@ -103,12 +190,18 @@ int _fstat(int file, struct stat *st)
   return 0;
 }
 
+// [解析] _isatty()：询问"这个文件描述符是不是终端(terminal)"。
+// [解析] 这里固定回答 1（是），好处是标准库会按"行缓冲/不缓冲"的方式处理输出，
+// [解析]   也就是 printf 的内容会尽快发出去，而不会攒够一大块才发。
 int _isatty(int file)
 {
   (void)file;
   return 1;
 }
 
+// [解析] _lseek()：移动文件的读写位置（类似把磁带倒到某个位置）。串口是字符设备，
+// [解析]   数据只能顺着读/写、不能回头，所以这里什么都不做，返回 0 表示"位置没变"。
+// [解析] 参数：ptr 偏移量；dir 起点（SEEK_SET / SEEK_CUR / SEEK_END），都用不到。
 int _lseek(int file, int ptr, int dir)
 {
   (void)file;
@@ -117,6 +210,9 @@ int _lseek(int file, int ptr, int dir)
   return 0;
 }
 
+// [解析] _open()：打开文件。单片机上没有文件系统，所以"假装总是失败"，返回 -1。
+// [解析] 末尾的 "..." 是 C 的可变参数写法：标准 open() 的第三个参数 mode 是可选的，
+// [解析]   为了和标准函数原型对得上，这里也要留着。
 int _open(char *path, int flags, ...)
 {
   (void)path;
@@ -125,6 +221,9 @@ int _open(char *path, int flags, ...)
   return -1;
 }
 
+// [解析] _wait()：等待子进程结束。没有多进程，返回 -1，
+// [解析]   同时 errno = ECHILD（Error CHILD，意思是"我没有子进程"）。
+// [解析] errno 是标准库提供的全局"错误码"变量，函数出错时设置它，调用者再来读。
 int _wait(int *status)
 {
   (void)status;
@@ -132,6 +231,8 @@ int _wait(int *status)
   return -1;
 }
 
+// [解析] _unlink()：删除一个文件（也就是 rm 的底层实现）。没有文件系统，
+// [解析]   返回 -1，errno = ENOENT（No ENTry / 文件不存在）。
 int _unlink(char *name)
 {
   (void)name;
@@ -139,12 +240,18 @@ int _unlink(char *name)
   return -1;
 }
 
+// [解析] _times()：返回程序占用的 CPU 时间（给 times() 这个函数用的）。
+// [解析]   没有操作系统帮忙统计，所以返回 -1 表示"不支持"。
+// [解析] 返回类型是 clock_t，-1 会被隐式转换成该类型，这是工具链生成的固定写法。
 clock_t _times(struct tms *buf)
 {
   (void)buf;
   return -1;
 }
 
+// [解析] _stat()：按"路径"查询文件信息。和上面的 _fstat() 一样，
+// [解析]   这里干脆假装"所有路径都是一个字符设备"，一律返回成功。
+// [解析] 这么做的好处是标准库里的某些检查不会因为"文件不存在"而提前报错退出。
 int _stat(const char *file, struct stat *st)
 {
   (void)file;
@@ -152,6 +259,8 @@ int _stat(const char *file, struct stat *st)
   return 0;
 }
 
+// [解析] _link()：创建硬链接（两个文件名指向同一份数据）。没有文件系统，
+// [解析]   返回 -1，errno = EMLINK（Too Many LINKs）。
 int _link(char *old, char *new)
 {
   (void)old;
@@ -160,12 +269,17 @@ int _link(char *old, char *new)
   return -1;
 }
 
+// [解析] _fork()：复制出一个新进程。单片机没有多进程，返回 -1，
+// [解析]   errno = EAGAIN（资源暂时不可用，是"现在不行"而不是"永远不行"）。
 int _fork(void)
 {
   errno = EAGAIN;
   return -1;
 }
 
+// [解析] _execve()：用另一个程序替换当前程序（类似 Linux 的 exec）。单片机做不到，
+// [解析]   返回 -1，errno = ENOMEM（内存不足）。
+// [解析] 参数：name 程序名；argv 参数数组；env 环境变量数组 —— 全都用不到。
 int _execve(char *name, char **argv, char **env)
 {
   (void)name;
@@ -175,6 +289,12 @@ int _execve(char *name, char **argv, char **env)
   return -1;
 }
 
+// [解析] 从这里往下，整段都被 #if defined(__PICOLIBC__) 包着。
+// [解析] __PICOLIBC__ 是"编译器用的是 Picolibc 这个精简 C 库"时才会定义的宏；
+// [解析]   本工程（arm-none-eabi-gcc 默认）用的是 newlib，这个宏没有定义，
+// [解析]   所以下面这一整段在编译时会被整体跳过 —— 实在看不懂也不影响使用。
+// [解析] 之所以还是讲一遍，是因为万一以后换了工具链这段就会生效，
+// [解析]   它的作用就是把 Picolibc 的 stdin/stdout 接到本文件上面写好的 _read/_write 上。
 // --- Picolibc Specific Section ---
 #if defined(__PICOLIBC__)
 
@@ -185,6 +305,10 @@ int _execve(char *name, char **argv, char **env)
  * @param file FILE stream pointer (ignored).
  * @retval int The character written.
  */
+// [解析] starm_putc()：Picolibc 专用，"往流里写 1 个字符"。
+// [解析]   Picolibc 的 FILE 流不直接操作硬件，而是回调这么一个函数，
+// [解析]   所以这里转手交给 __io_putchar() —— 和上面 _write() 的套路完全一样。
+// [解析] 参数：c 要输出的字符；file 是所属的流（忽略不用）。返回值：写出去的字符。
 static int starm_putc(char c, FILE *file)
 {
 	(void) file;
@@ -198,6 +322,9 @@ static int starm_putc(char c, FILE *file)
  * @param file FILE stream pointer (ignored).
  * @retval int The character read, cast to an unsigned char then int.
  */
+// [解析] starm_getc()：和上面配对的"从流里读 1 个字符"，转手调 __io_getchar()。
+// [解析] 中间特意用 unsigned char 接：这样 0~255 的字节不会被当成负数，
+// [解析]   读完再隐式提升成 int 返回，这是标准库约定俗成的写法。
 static int starm_getc(FILE *file)
 {
 	unsigned char c;
@@ -209,6 +336,11 @@ static int starm_getc(FILE *file)
 // Define and initialize the standard I/O streams for Picolibc.
 // FDEV_SETUP_STREAM connects the starm_putc and starm_getc helper functions to a FILE structure.
 // _FDEV_SETUP_RW indicates the stream is for reading and writing.
+// [解析] 定义一个 FILE 结构体变量 __stdio，它就是"标准输入输出流"的本体。
+// [解析] FDEV_SETUP_STREAM(putc, getc, flush, flags) 是 Picolibc 的宏：
+// [解析]   把上面两个读写函数装进这个流里；第 3 个参数 NULL 表示不需要 flush 回调；
+// [解析]   最后的 _FDEV_SETUP_RW 表示"这个流既可读也可写"。
+// [解析] 前面的 static 表示它只在本文件内可见，不会和别处同名符号打架。
 static FILE __stdio = FDEV_SETUP_STREAM(starm_putc,
 					starm_getc,
 					NULL,
@@ -216,6 +348,10 @@ static FILE __stdio = FDEV_SETUP_STREAM(starm_putc,
 
 // Assign the standard stream pointers (stdin, stdout, stderr) to the initialized stream.
 // Picolibc uses these pointers for standard I/O operations (printf, scanf, etc.).
+// [解析] 下面三行把"标准流"三个指针都指向同一个 __stdio：
+// [解析]   嵌入式里通常只有一条串口，输入输出共用它，是最省事的做法。
+// [解析] __strong_reference(stdin, stdout) 的意思是"给 stdin 再挂一个别名 stdout"，
+// [解析]   在链接器层面 stdout / stderr 和 stdin 是同一个地址、同一个对象。
 FILE *const stdin = &__stdio;
 __strong_reference(stdin, stdout);
 __strong_reference(stdin, stderr);
@@ -223,6 +359,12 @@ __strong_reference(stdin, stderr);
 // Create strong aliases mapping standard C library function names (without underscore)
 // to the implemented system call stubs (with underscore). Picolibc uses these
 // standard names internally, so this linking is required.
+// [解析] 下面这一串 __strong_reference(A, B) 的作用是：把"带下划线的名字 A"
+// [解析]   和"标准库实际调用的名字 B"绑定成同一个函数。例如
+// [解析]   __strong_reference(_write, write) 就是说：谁调用 write()，
+// [解析]   真正执行的还是本文件上面那个 _write()。
+// [解析] 为什么需要它？newlib 直接找 _write()，而 Picolibc 找的是不带下划线的 write()，
+// [解析]   为了两边都能用，就在这里统一别名。
 __strong_reference(_read, read);
 __strong_reference(_write, write);
 __strong_reference(_times, times);
@@ -240,5 +382,10 @@ __strong_reference(_fstat, fstat);
 __strong_reference(_exit, exit);
 __strong_reference(_kill, kill);
 __strong_reference(_getpid, getpid);
+// [解析] ↑ 最后这一串别名到此结束，覆盖了 read/write/open/close/lseek/stat/exit/kill 等全部
+// [解析]   标准库会用到的系统调用名字，保证 Picolibc 也能正常链接通过。
 
 #endif //__PICOLIBC__
+// [解析] ↑ #endif 和上面的 #if defined(__PICOLIBC__) 配对。
+// [解析]   注意注释 //__PICOLIBC__ 是原作者写的，用来提示"这个 #endif 属于哪个 #if"，
+// [解析]   长文件里这种标记能省很多事，值得学。

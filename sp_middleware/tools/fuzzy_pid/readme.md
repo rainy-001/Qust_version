@@ -1,24 +1,24 @@
-# ʹ�÷���
+# 使用方法
 
-����ֱ��ʹ��
+可以直接使用
 ```cpp
 sp::FuzzyPID motor_pid(dt, kp, ki, kd, max_out, max_iout, error_scale, error_rate_scale,alpha, angular, dynamic);
 ```
-����
+代替
 ```cpp
 sp::PID motor_pid(dt,kp,ki,kd,max_out,max_iout,alpha,angular,dynamic);
 ```
 
-- ������ͬ�����Ĳ���������ȫһ�������÷���Ҳ����ͨpid��ȫһ��������ֱ�ӵõ�һ������������ҶԲ�ͬ��Ӧ�ó����и��õ���Ӧ�ԡ�
+- 其中相同命名的参数可以完全一样，调用方法也和普通pid完全一样，可以直接得到一点点提升，并且对不同的应用场景有更好的适应性。
 
-- **Warning** ���������PID�Ѿ������𵴱�Ե��������Ҫ�ʵ���С30%���ҵ�PID����ֵ��
+- **Warning** ：假如你的PID已经调到震荡边缘，可能需要适当减小30%左右的PID参数值。
 
 
-`error_scale`����Χ 
-- �ԽǶȻ����⻷��Ϊ������Χ�� $ [-\pi,\pi] $ ,��ô`error_scale`�͸ø� $ \pi $��
+`error_scale`：误差范围 
+- 以角度环（外环）为例，误差范围是 $ [-\pi,\pi] $ ,那么`error_scale`就该给 $ \pi $。
 
-`error_rate_scale`�����仯�ʷ�Χ
-- ��Ҫȡ���ڵ��Ť�غ�ת������������ʵ�⡣
+`error_rate_scale`：误差变化率范围
+- 主要取决于电机扭矩和转动惯量，建议实测。
 
-`error_scale`��`error_rate_scale`����Խ׼��ģ��PID��Ч��Ҳ����Ӧ���á�
+`error_scale`和`error_rate_scale`给得越准，模糊PID的效果也会相应更好。
 
