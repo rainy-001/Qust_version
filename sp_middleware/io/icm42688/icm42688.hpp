@@ -1,19 +1,7 @@
-// [解析] ==========================================================================
-// [解析] 【文件】sp_middleware/io/icm42688/icm42688.hpp
-// [解析] 【作用】STM32 通过 SPI 读取 ICM42688 六轴 IMU（3 轴加速度 + 3 轴角速度 + 温度），
-// [解析]         并换算成物理单位（m/s^2、rad/s、摄氏度），同时把传感器坐标系
-// [解析]         旋转到机器人坐标系后放进公共成员。
-// [解析] 【被谁用】applications/ 里创建对象，例如：
-// [解析]           sp::ICM42688 icm42688(&hspi1, CS_GPIO_Port, CS_Pin, r_ab);
-// [解析]           然后周期性调用 icm42688.update()，再读 acc / gyro / temp。
-// [解析] 【与 bmi088 的关系】这两个驱动是"同一套接口的两种传感器实现"，可以互换使用：
-// [解析]         成员名（acc/gyro/temp、init/update）完全一致，方便上层代码切换硬件。
-// [解析] 【关键点】1) ICM42688 只有一根片选线 CS（BMI088 是两颗芯片、两根片选），
-// [解析]             因为它的加速度计和陀螺仪集成在同一颗芯片里、共用寄存器空间。
-// [解析]           2) 读寄存器时只需要 1 个无效字节，有效数据从 rx_buff_[1] 开始。
-// [解析]           3) init() 里加了 osDelay(10) 防止死循环把系统卡死（比 bmi088 更友好）。
-// [解析] 【阅读顺序】先看本文件了解接口，再看 icm42688.cpp 了解寄存器和换算细节。
-// [解析] ==========================================================================
+// [解析] ICM42688 六轴 IMU 驱动接口：SPI 读加速度/角速度/温度，换算后写进公共成员。
+// [解析] 接口与 bmi088 完全一致（acc/gyro/temp + init/update），两者可互换，只是片选少一根。
+// [解析] 上层建对象 -> init() -> 循环 update()；init() 失败会 10ms 一次地重试，不会彻底卡死。
+// [解析] 单位约定：acc 为 m/s^2、gyro 为 rad/s（不是 °/s）、temp 为 ℃，且都已转到机器人坐标系。
 
 #ifndef SP__ICM42688_HPP
 #define SP__ICM42688_HPP
@@ -23,67 +11,39 @@
 
 namespace sp
 {
-// [解析] ICM42688 类：一个对象管一颗 IMU（1 条 SPI + 1 根片选线）。
-// [解析] 典型使用流程：
-// [解析]   1) ICM42688 icm(&hspi1, cs_port, cs_pin, r_ab);  // 只存参数，不碰硬件
-// [解析]   2) icm.init();    // 复位 + 查 ID + 写配置表，失败会 10ms 一次地重试
-// [解析]   3) icm.update();  // 周期性调用（本项目 ODR 设 1000Hz，即 1kHz 任务里调）
-// [解析]   4) 读 icm.acc[0..2] / icm.gyro[0..2] / icm.temp
+// [解析] 一个对象管一颗 IMU（1 条 SPI + 1 根片选）。构造只存参数（r_ab 为安装方向矩阵）。
 class ICM42688
 {
 public:
   // CS: SPI片选信号, 低电平时选中ICM42688
   // R_ab: icm42688原始坐标系{b}在机器人坐标系{a}下的坐标矩阵
-  // [解析] 构造函数：只把参数记录下来，不产生任何 SPI 通信，所以可以先建对象、后 init()。
-  // [解析] 参数逐个说明：
-  // [解析]   hspi   —— CubeMX 生成的 SPI 句柄（如 &hspi1），指明挂在哪条 SPI 上；
-  // [解析]   cs_port—— 片选引脚所在 GPIO 端口（GPIOA/GPIOB...）；
-  // [解析]   cs_pin —— 片选引脚号，如 GPIO_PIN_4；读写时必须拉低选中、拉高释放；
-  // [解析]   r_ab   —— 3x3 旋转矩阵（无量纲），把传感器坐标系下的向量转到机器人坐标系，
-  // [解析]              通常由 0 和 ±1 组成，具体取值取决于 IMU 在车上的安装朝向；
-  // [解析]   gyro_multipliers —— 陀螺仪三轴标度因数（无量纲，理想 1.0），
-  // [解析]              用于补偿三轴灵敏度差异；默认 nullptr 表示不校准（三轴都取 1.0）。
   ICM42688(
     SPI_HandleTypeDef * hspi, GPIO_TypeDef * cs_port, uint16_t cs_pin, 
     const float r_ab[3][3], const float gyro_multipliers[3] = nullptr);
 
-  // [解析] 下面 3 个是"输出型"公共成员：update() 每次执行都会刷新它们，直接读即可。
   float acc[3];   // 只读! 单位: m/s^2
-  // [解析] ↑ 机器人坐标系下的三轴加速度（下标 0/1/2 = x/y/z），静止平放时其中一轴约 ±9.8。
   float gyro[3];  // 只读! 单位: rad/s
-  // [解析] ↑ 机器人坐标系下的三轴角速度。注意是弧度/秒，不是度/秒（1 rad/s ≈ 57.3 °/s）。
   float temp;     // 只读! 单位: celsius
-  // [解析] ↑ 芯片内部温度（摄氏度）。它反映的是芯片自身温度，会比环境温度偏高几度。
 
-  // [解析] 初始化：软复位 -> 检查 WHO_AM_I -> 按配置表写电源模式/量程/ODR。
-  // [解析] 内部是 while 重试，每次失败等 10ms；传感器不在线时会一直重试（不会完全卡死 CPU）。
-  // [解析] 调用时机：上电初始化阶段调用一次，不要在周期任务里反复调用。
+  // [解析] 软复位 + 查 WHO_AM_I + 按配置表写电源模式/量程/ODR，失败则 10ms 后重试。
   void init();
-  // [解析] 更新一次数据：一次突发读 14 字节（温度 + 加速度 + 角速度），换算后写入公共成员。
-  // [解析] 调用时机：放在 1kHz 左右的周期任务里（对应 ODR=1000Hz 的配置）。
-  // [解析] 副作用：会操作片选引脚并占用 SPI 总线，所以不能和别的 SPI 设备同时在中断里调用。
+  // [解析] 一次突发读 14 字节（温度 + 加速度 + 角速度）后换算；会占用 SPI，需按 ODR 周期调用。
   void update();
 
 private:
-  // [解析] 构造函数传进来的配置存在这里，之后每次读写寄存器都用它们。
-  SPI_HandleTypeDef * hspi_;  // [解析] 本对象使用的 SPI 外设句柄
-  GPIO_TypeDef * cs_port_;    // [解析] 片选引脚所在端口
-  uint16_t cs_pin_;           // [解析] 片选引脚号
-  const float r_ab_[3][3];    // [解析] 传感器坐标系 -> 机器人坐标系的旋转矩阵拷贝
+  SPI_HandleTypeDef * hspi_;
+  GPIO_TypeDef * cs_port_;
+  uint16_t cs_pin_;
+  const float r_ab_[3][3];
 
-  // [解析] SPI 收发共用缓冲区。大小 20 字节：一次突发读最长 15 字节（1 地址 + 14 数据），够用。
-  // [解析] 注意：因为是成员变量，同一个对象被多个任务并发调用会互相踩数据（非线程安全）。
   uint8_t rx_buff_[20];
   uint8_t tx_buff_[20];
 
   float gyro_multipliers_[3]; // 存储三轴标度因数
-  // [解析] ↑ 三轴灵敏度修正系数，update() 里乘到角速度上；不传参时默认 {1.0, 1.0, 1.0}。
 
-  // [解析] 以下私有函数是内部实现细节，外部不需要调用。
-  // [解析] device_init() 返回 ICM42688_NO_ERROR(0x00) 表示成功，其他值见 icm42688_defs.h。
-  uint8_t device_init();  // [解析] 执行复位和配置表，返回错误码
-  void read_registers(uint8_t reg, uint8_t len);   // [解析] 从 reg 起连续读 len 字节到 rx_buff_
-  void write_register(uint8_t reg, uint8_t data);  // [解析] 向寄存器 reg 写 1 字节 data
+  uint8_t device_init();
+  void read_registers(uint8_t reg, uint8_t len);
+  void write_register(uint8_t reg, uint8_t data);
 };
 
 }  // namespace sp
