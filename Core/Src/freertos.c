@@ -49,7 +49,7 @@
 /* USER CODE END Variables */
 osThreadId LEDHandle;
 osThreadId IMUHandle;
-osThreadId CANHandle;
+osThreadId CHASSISHandle;
 osThreadId DBUSHandle;
 osThreadId BUZZERHandle;
 osThreadId ADCHandle;
@@ -61,7 +61,7 @@ osThreadId ADCHandle;
 
 void led_task(void const * argument);
 void imu_task(void const * argument);
-void can_task(void const * argument);
+void chassis_task(void const * argument);
 void uart_task(void const * argument);
 void buzzer_task(void const * argument);
 void adc_task(void const * argument);
@@ -134,9 +134,9 @@ void MX_FREERTOS_Init(void) {
   osThreadDef(IMU, imu_task, osPriorityBelowNormal, 0, 256);
   IMUHandle = osThreadCreate(osThread(IMU), NULL);
 
-  /* definition and creation of CAN */
-  osThreadDef(CAN, can_task, osPriorityHigh, 0, 128);
-  CANHandle = osThreadCreate(osThread(CAN), NULL);
+  /* definition and creation of CHASSIS */
+  osThreadDef(CHASSIS, chassis_task, osPriorityHigh, 0, 256);
+  CHASSISHandle = osThreadCreate(osThread(CHASSIS), NULL);
 
   /* definition and creation of DBUS */
   osThreadDef(DBUS, uart_task, osPriorityRealtime, 0, 256);
@@ -192,22 +192,22 @@ __weak void imu_task(void const * argument)
   /* USER CODE END imu_task */
 }
 
-/* USER CODE BEGIN Header_can_task */
+/* USER CODE BEGIN Header_chassis_task */
 /**
-* @brief Function implementing the CAN thread.
+* @brief Function implementing the CHASSIS thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_can_task */
-__weak void can_task(void const * argument)
+/* USER CODE END Header_chassis_task */
+__weak void chassis_task(void const * argument)
 {
-  /* USER CODE BEGIN can_task */
+  /* USER CODE BEGIN chassis_task */
   /* Infinite loop */
   for(;;)
   {
     osDelay(1);
   }
-  /* USER CODE END can_task */
+  /* USER CODE END chassis_task */
 }
 
 /* USER CODE BEGIN Header_uart_task */

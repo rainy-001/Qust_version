@@ -45,9 +45,12 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
- applications/can_task.cpp # <- 添加这一行
+ applications/chassis_task.cpp # <- 底盘控制链路(omni 四全向轮 + 四路 M3508)
     sp_middleware/io/can/can.cpp # <- 添加这一行
     sp_middleware/motor/rm_motor/rm_motor.cpp # <- 添加这一行
+    sp_middleware/tools/omni/omni.cpp # <- 全向轮运动学解算
+    sp_middleware/tools/pid/pid.cpp # <- 速度环
+    sp_middleware/tools/math_tools/math_tools.cpp # <- pid.cpp 依赖 limit_angle/limit_max
 
  applications/led_task.cpp # <- 添加这一行
     sp_middleware/io/led/led.cpp # <- 添加这一行
