@@ -23,8 +23,8 @@ namespace
 /*==================== 机械参数（必须按实车实测修改）====================*/
 // [解析] 这三个数决定运动学是否正确，量错会让底盘"斜着走"或走不直，务必用卷尺实测。
 constexpr float kWheelRadius = 0.076f;  // 轮子半径, 单位: m（4 寸全向轮, 直径 152mm）
-constexpr float kHalfLength = 0.140f;   // 底盘中心到前/后轮轴线的距离, 单位: m
-constexpr float kHalfWidth = 0.140f;  // 底盘中心到左/右轮轴线的距离, 单位: m（正方形底盘两者相等）
+constexpr float kHalfLength = 0.150f;   // 底盘中心到前/后轮轴线的距离, 单位: m
+constexpr float kHalfWidth = 0.150f;  // 底盘中心到左/右轮轴线的距离, 单位: m（正方形底盘两者相等）
 
 /*==================== 电机 ID 与装配方向 ====================*/
 // [解析] ID 顺序沿用 sp_middleware/tools/omni/readme.md「用法」示例的约定, 绕底盘逆时针一圈:
