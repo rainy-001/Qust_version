@@ -5,10 +5,9 @@
 // [解析] 周期是 osDelay(1)≈1ms，PID 的 dt 写死 1e-3f，两者必须一致；改周期要连 dt 一起改。
 // [解析] 超级电容与功率控制硬件尚未就绪，接口预留在本文件下半部分的"预留接口"区。
 
-#include "cmsis_os.h"
-
 #include <cmath>
 
+#include "cmsis_os.h"
 #include "io/can/can.hpp"
 #include "io/dbus/dbus.hpp"
 #include "motor/rm_motor/rm_motor.hpp"
@@ -24,37 +23,43 @@ namespace
 /*==================== 机械参数（必须按实车实测修改）====================*/
 // [解析] 这三个数决定运动学是否正确，量错会让底盘"斜着走"或走不直，务必用卷尺实测。
 constexpr float kWheelRadius = 0.076f;  // 轮子半径, 单位: m（4 寸全向轮, 直径 152mm）
-constexpr float kHalfLength = 0.190f;   // 底盘中心到前/后轮轴线的距离, 单位: m
-constexpr float kHalfWidth = 0.190f;    // 底盘中心到左/右轮轴线的距离, 单位: m（正方形底盘两者相等）
+constexpr float kHalfLength = 0.140f;   // 底盘中心到前/后轮轴线的距离, 单位: m
+constexpr float kHalfWidth = 0.140f;  // 底盘中心到左/右轮轴线的距离, 单位: m（正方形底盘两者相等）
 
 /*==================== 电机 ID 与装配方向 ====================*/
-// [解析] ID 必须和 C620 电调上的拨码一致。某个轮子转向反了, 就把对应的 kReverseXx 改成 true,
-// [解析]   不要去改 omni 的公式符号（标定方法见 sp_middleware/tools/omni/readme.md 第"reverse_xx"节）。
-constexpr uint8_t kIdLf = 1;  // 左前
-constexpr uint8_t kIdRf = 2;  // 右前
+// [解析] ID 顺序沿用 sp_middleware/tools/omni/readme.md「用法」示例的约定, 绕底盘逆时针一圈:
+// [解析]         ID1 = 右前(RF)   ID2 = 左前(LF)   ID3 = 左后(LR)   ID4 = 右后(RR)
+// [解析] ID 必须和 C620 电调拨码一致; 四台必须同属 1~4（一条 0x200 帧只装得下 4 台）。
+// [解析] 某个轮子转向反了, 就把对应的 kReverseXx 改成 true, 不要去改 omni 的公式符号
+// [解析]   （标定方法见 sp_middleware/tools/omni/readme.md 第"reverse_xx"节）。
+constexpr uint8_t kIdRf = 1;  // 右前
+constexpr uint8_t kIdLf = 2;  // 左前
 constexpr uint8_t kIdLr = 3;  // 左后
 constexpr uint8_t kIdRr = 4;  // 右后
 
-constexpr bool kReverseLf = false;
 constexpr bool kReverseRf = false;
+constexpr bool kReverseLf = false;
 constexpr bool kReverseLr = false;
 constexpr bool kReverseRr = false;
 
 constexpr float kRatio = 3591.0f / 187.0f;  // M3508 P19 减速比 ≈ 19.2, 反馈与指令都换算到轮端
 
 /*==================== 控制参数 ====================*/
-constexpr float kDt = 1e-3f;       // 控制周期, 单位: s, 必须与 osDelay(1) 一致
-constexpr float kMaxSpeed = 1.5f;  // 最大平移速度, 单位: m/s（首次上电建议先降到 0.5）
-constexpr float kMaxOmega = 2.0f;  // 最大自转角速度, 单位: rad/s
+constexpr float kDt = 1e-3f;             // 控制周期, 单位: s, 必须与 osDelay(1) 一致
+constexpr float kMaxSpeed = 1.5f;        // 最大平移速度, 单位: m/s（首次上电建议先降到 0.5）
+constexpr float kMaxOmega = 2.0f;        // 最大自转角速度, 单位: rad/s
 constexpr float kStickDeadzone = 0.05f;  // 摇杆死区, 防中位抖动导致底盘缓慢爬行
 
-// [解析] 速度环的输出量纲是"输出轴力矩 N·m"：M3508 满量程约 6 N·m(20A)，即 1 N·m ≈ 3.3A。
+// [解析] 速度环的输出量纲是"输出轴力矩 N·m"。厂商手册(《M3508 使用说明 V1.0》特征参数)给的是:
+// [解析]   转矩常数 0.3 N·m/A（输出轴口径）, 额定(最大连续)转矩 3 N·m @ 10A, 堵转扭矩 4.5 N·m。
+// [解析]   换算: 1 N·m ≈ 3.3A；C620 输出 20A 时约 6 N·m, 但那是短时峰值, 不要当工作点。
+// [解析]   下面的 kMaxTorque = 1.2 N·m 仅为额定连续转矩的 40%, 热上是安全的。
 // [解析] 下面这组参数是保守的起步值, 上电后按注释里的顺序调, 不要一次改多个。
 // [解析] kp 的取值由 tools/verify_chassis_sim.cpp 的离线仿真给出: 0.30→0.60 把阶跃调节时间
 // [解析]   从 1.64 倍物理下限压到 1.20 倍, 再往上加收益很小; 全程超调 < 0.1%。
-constexpr float kKp = 0.60f;        // 比例, 单位: N·m/(rad/s)。先加到"能跟上、不啸叫"
-constexpr float kKi = 0.40f;        // 积分, 用来消静差。平台期还达不到目标速度就加大
-constexpr float kKd = 0.0f;         // 速度环一般不用微分
+constexpr float kKp = 0.60f;  // 比例, 单位: N·m/(rad/s)。先加到"能跟上、不啸叫"
+constexpr float kKi = 0.40f;  // 积分, 用来消静差。平台期还达不到目标速度就加大
+constexpr float kKd = 0.0f;   // 速度环一般不用微分
 // [解析] 这一项才是"跟不跟手"的真正瓶颈: 1.2 N·m ≈ 3.2 m/s² 整车加速度, 2.4 N·m ≈ 6.3, 3.6 ≈ 9.5。
 // [解析]   想要更冲就先加它（同时盯住电流/电池), 而不是去加 kp。
 constexpr float kMaxTorque = 1.2f;  // 单轮力矩上限, 单位: N·m（≈4A）。急加速抖动就往下调
@@ -67,17 +72,21 @@ sp::CAN can1(&hcan1);
 
 // [解析] ratio 传减速比, 之后 motor.speed 就是轮端 rad/s（正好是 omni.calc() 的单位）,
 // [解析]   motor.cmd() 的入参就是输出轴 N·m, 中间不需要再手工换算了。
-sp::RM_Motor motor_lf(kIdLf, sp::RM_Motors::M3508, kRatio);
+// [解析] 声明顺序 = ID 顺序（ID1 右前 → ID4 右后），这样和拨码表能一眼对上。
 sp::RM_Motor motor_rf(kIdRf, sp::RM_Motors::M3508, kRatio);
+sp::RM_Motor motor_lf(kIdLf, sp::RM_Motors::M3508, kRatio);
 sp::RM_Motor motor_lr(kIdLr, sp::RM_Motors::M3508, kRatio);
 sp::RM_Motor motor_rr(kIdRr, sp::RM_Motors::M3508, kRatio);
 
 // [解析] 解算器只认"轮子位于四角、滚动方向垂直于对角线", l == w 时就是常见的 45° X 型布局。
-sp::Omni chassis(kWheelRadius, kHalfLength, kHalfWidth, kReverseLf, kReverseRf, kReverseLr, kReverseRr);
+// [解析] 注意 Omni 构造参数的顺序是 (lf, lr, rf, rr), 不是 (lf, rf, lr, rr) —— 写反会让
+// [解析]   "翻右后"实际翻了左后, 而且四个都为 false 时完全看不出来。
+sp::Omni chassis(
+  kWheelRadius, kHalfLength, kHalfWidth, kReverseLf, kReverseLr, kReverseRf, kReverseRr);
 
 // [解析] 四路速度环参数完全一致, 只是设定值与反馈值不同, 所以用同一个构造函数反复建对象。
-sp::PID pid_lf(kDt, kKp, kKi, kKd, kMaxTorque, kMaxIout);
 sp::PID pid_rf(kDt, kKp, kKi, kKd, kMaxTorque, kMaxIout);
+sp::PID pid_lf(kDt, kKp, kKi, kKd, kMaxTorque, kMaxIout);
 sp::PID pid_lr(kDt, kKp, kKi, kKd, kMaxTorque, kMaxIout);
 sp::PID pid_rr(kDt, kKp, kKi, kKd, kMaxTorque, kMaxIout);
 
@@ -174,23 +183,25 @@ void chassis_step()
 
   // ---- 4. 四路速度环：反馈用电机反馈的轮端角速度, 输出是力矩 ----
   // [解析] 用带积分分离的重载: 误差大时只走比例项, 误差小了才开始积分, 起步不会先堆满积分再冲过头。
-  pid_lf.calc(chassis.speed_lf, motor_lf.speed, kIntegralPause);
+  // [解析] 下面四行与对象声明同序（ID1 右前 → ID4 右后），torque[] 的下标也按这个顺序。
   pid_rf.calc(chassis.speed_rf, motor_rf.speed, kIntegralPause);
+  pid_lf.calc(chassis.speed_lf, motor_lf.speed, kIntegralPause);
   pid_lr.calc(chassis.speed_lr, motor_lr.speed, kIntegralPause);
   pid_rr.calc(chassis.speed_rr, motor_rr.speed, kIntegralPause);
 
-  float torque[4] = {pid_lf.out, pid_rf.out, pid_lr.out, pid_rr.out};
+  float torque[4] = {pid_rf.out, pid_lf.out, pid_lr.out, pid_rr.out};
 
   // ---- 5. 功率/电流上限（预留接口）----
   // [解析] 机械功率 = Σ|实测转速 × 力矩|, 用实测值而不是目标值, 将来才和裁判系统的功率对得上。
-  const float power_w = std::fabs(motor_lf.speed * torque[0]) + std::fabs(motor_rf.speed * torque[1]) +
-                        std::fabs(motor_lr.speed * torque[2]) + std::fabs(motor_rr.speed * torque[3]);
+  const float power_w =
+    std::fabs(motor_rf.speed * torque[0]) + std::fabs(motor_lf.speed * torque[1]) +
+    std::fabs(motor_lr.speed * torque[2]) + std::fabs(motor_rr.speed * torque[3]);
   chassis_power_update(power_w);
   chassis_apply_power_limit(torque);
 
   // ---- 6. 下发 ----
-  motor_lf.cmd(torque[0]);
-  motor_rf.cmd(torque[1]);
+  motor_rf.cmd(torque[0]);
+  motor_lf.cmd(torque[1]);
   motor_lr.cmd(torque[2]);
   motor_rr.cmd(torque[3]);
   send_current_frame();
@@ -223,10 +234,10 @@ extern "C" void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef * hcan)
   while (HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0) > 0) {
     can1.recv();
 
-    if (can1.rx_id == motor_lf.rx_id)
-      motor_lf.read(can1.rx_data, stamp_ms);
-    else if (can1.rx_id == motor_rf.rx_id)
+    if (can1.rx_id == motor_rf.rx_id)
       motor_rf.read(can1.rx_data, stamp_ms);
+    else if (can1.rx_id == motor_lf.rx_id)
+      motor_lf.read(can1.rx_data, stamp_ms);
     else if (can1.rx_id == motor_lr.rx_id)
       motor_lr.read(can1.rx_data, stamp_ms);
     else if (can1.rx_id == motor_rr.rx_id)
