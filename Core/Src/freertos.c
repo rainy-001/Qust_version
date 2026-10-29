@@ -47,24 +47,14 @@
 /* USER CODE BEGIN Variables */
 
 /* USER CODE END Variables */
-osThreadId LEDHandle;
-osThreadId IMUHandle;
-osThreadId CHASSISHandle;
-osThreadId DBUSHandle;
-osThreadId BUZZERHandle;
-osThreadId ADCHandle;
+osThreadId RAMMERHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 
 /* USER CODE END FunctionPrototypes */
 
-void led_task(void const * argument);
-void imu_task(void const * argument);
-void chassis_task(void const * argument);
-void uart_task(void const * argument);
-void buzzer_task(void const * argument);
-void adc_task(void const * argument);
+void rammer_task(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -126,29 +116,9 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of LED */
-  osThreadDef(LED, led_task, osPriorityLow, 0, 128);
-  LEDHandle = osThreadCreate(osThread(LED), NULL);
-
-  /* definition and creation of IMU */
-  osThreadDef(IMU, imu_task, osPriorityBelowNormal, 0, 256);
-  IMUHandle = osThreadCreate(osThread(IMU), NULL);
-
-  /* definition and creation of CHASSIS */
-  osThreadDef(CHASSIS, chassis_task, osPriorityHigh, 0, 256);
-  CHASSISHandle = osThreadCreate(osThread(CHASSIS), NULL);
-
-  /* definition and creation of DBUS */
-  osThreadDef(DBUS, uart_task, osPriorityRealtime, 0, 256);
-  DBUSHandle = osThreadCreate(osThread(DBUS), NULL);
-
-  /* definition and creation of BUZZER */
-  osThreadDef(BUZZER, buzzer_task, osPriorityAboveNormal, 0, 128);
-  BUZZERHandle = osThreadCreate(osThread(BUZZER), NULL);
-
-  /* definition and creation of ADC */
-  osThreadDef(ADC, adc_task, osPriorityAboveNormal, 0, 128);
-  ADCHandle = osThreadCreate(osThread(ADC), NULL);
+  /* definition and creation of RAMMER */
+  osThreadDef(RAMMER, rammer_task, osPriorityAboveNormal, 0, 256);
+  RAMMERHandle = osThreadCreate(osThread(RAMMER), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -156,112 +126,22 @@ void MX_FREERTOS_Init(void) {
 
 }
 
-/* USER CODE BEGIN Header_led_task */
+/* USER CODE BEGIN Header_rammer_task */
 /**
-* @brief Function implementing the LED thread.
+* @brief Function implementing the RAMMER thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_led_task */
-__weak void led_task(void const * argument)
+/* USER CODE END Header_rammer_task */
+__weak void rammer_task(void const * argument)
 {
-  /* USER CODE BEGIN led_task */
+  /* USER CODE BEGIN rammer_task */
   /* Infinite loop */
   for(;;)
   {
     osDelay(1);
   }
-  /* USER CODE END led_task */
-}
-
-/* USER CODE BEGIN Header_imu_task */
-/**
-* @brief Function implementing the IMU thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_imu_task */
-__weak void imu_task(void const * argument)
-{
-  /* USER CODE BEGIN imu_task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END imu_task */
-}
-
-/* USER CODE BEGIN Header_chassis_task */
-/**
-* @brief Function implementing the CHASSIS thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_chassis_task */
-__weak void chassis_task(void const * argument)
-{
-  /* USER CODE BEGIN chassis_task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END chassis_task */
-}
-
-/* USER CODE BEGIN Header_uart_task */
-/**
-* @brief Function implementing the DBUS thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_uart_task */
-__weak void uart_task(void const * argument)
-{
-  /* USER CODE BEGIN uart_task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END uart_task */
-}
-
-/* USER CODE BEGIN Header_buzzer_task */
-/**
-* @brief Function implementing the BUZZER thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_buzzer_task */
-__weak void buzzer_task(void const * argument)
-{
-  /* USER CODE BEGIN buzzer_task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END buzzer_task */
-}
-
-/* USER CODE BEGIN Header_adc_task */
-/**
-* @brief Function implementing the ADC thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_adc_task */
-__weak void adc_task(void const * argument)
-{
-  /* USER CODE BEGIN adc_task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END adc_task */
+  /* USER CODE END rammer_task */
 }
 
 /* Private application code --------------------------------------------------*/

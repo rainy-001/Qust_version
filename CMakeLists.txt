@@ -44,37 +44,39 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 # Add sources to executable
+# [当前版本] 只编拨弹盘功能：M2006 上电即转 + 防堵转 + 蜂鸣器报警。
+#   其余任务（底盘/灯/电压/IMU/遥控/蜂鸣器任务）全部注释掉，需要时逐块取消注释即可。
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
- applications/chassis_task.cpp # <- 底盘控制链路(omni 四全向轮 + 四路 M3508)
+ applications/rammer_task.cpp # <- 拨弹盘任务(M2006 速度环 + 防堵转 + 蜂鸣器报警)
     sp_middleware/io/can/can.cpp # <- 添加这一行
+    sp_middleware/io/buzzer/buzzer.cpp # <- 添加这一行
     sp_middleware/motor/rm_motor/rm_motor.cpp # <- 添加这一行
-    sp_middleware/tools/omni/omni.cpp # <- 全向轮运动学解算
     sp_middleware/tools/pid/pid.cpp # <- 速度环
     sp_middleware/tools/math_tools/math_tools.cpp # <- pid.cpp 依赖 limit_angle/limit_max
 
- applications/led_task.cpp # <- 添加这一行
-    sp_middleware/io/led/led.cpp # <- 添加这一行
+    #  applications/chassis_task.cpp # <- 底盘控制链路(omni 四全向轮 + 四路 M3508)
+    # sp_middleware/tools/omni/omni.cpp # <- 全向轮运动学解算
+    #
+    #  applications/led_task.cpp
+    # sp_middleware/io/led/led.cpp
+    #
+    #  applications/voltage_detect.cpp
+    # sp_middleware/io/adc/adc.cpp
+    #
+    #  applications/imu_task.cpp
+    # sp_middleware/io/bmi088/bmi088.cpp
+    # sp_middleware/tools/mahony/mahony.cpp
+    # sp_middleware/tools/gimbal/gimbal.cpp
+    #
+    #  applications/buzzer_task.cpp
+    #
+    #  applications/uart_task.cpp
+    # sp_middleware/io/dbus/dbus.cpp
+    #
+    #  applications/vision_task.cpp
+    # sp_middleware/io/vision/vision.cpp
+    # sp_middleware/tools/crc/crc.cpp
 
-    applications/voltage_detect.cpp # <- 添加这一行
-    sp_middleware/io/adc/adc.cpp # <- 添加这一行
-
-       applications/imu_task.cpp # <- 添加这一行
-    sp_middleware/io/bmi088/bmi088.cpp # <- 添加这一行
-    sp_middleware/tools/mahony/mahony.cpp # <- 添加这一行
-    sp_middleware/tools/gimbal/gimbal.cpp # <- 添加这一行
-
-      applications/buzzer_task.cpp # <- 添加这一行
-    sp_middleware/io/buzzer/buzzer.cpp # <- 添加这一行
-
-      applications/uart_task.cpp # <- 添加这一行
-    sp_middleware/io/dbus/dbus.cpp # <- 添加这一行
-
-    #     applications/vision_task.cpp # <- 添加这一行
-    # sp_middleware/io/vision/vision.cpp # <- 添加这一行
-    # sp_middleware/tools/crc/crc.cpp # <- 添加这一行
-    # sp_middleware/tools/math_tools/math_tools.cpp # <- 添加这一行
-
-    
     # Add user sources here
 )
 

@@ -18,6 +18,9 @@
 // [解析] remote 的对象定义在 uart_task.cpp（DBus 接收任务），本任务只读它解析好的结果，不再加锁。
 extern sp::DBus remote;
 
+// [解析] 拨弹盘的 M2006 定义在 rammer_task.cpp；那个任务独占它的控制，本任务只负责把 0x205 帧转交过去。
+extern sp::RM_Motor rammer_motor;
+
 namespace
 {
 /*==================== 机械参数（必须按实车实测修改）====================*/
@@ -245,6 +248,8 @@ extern "C" void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef * hcan)
       motor_lr.read(can1.rx_data, stamp_ms);
     else if (can1.rx_id == motor_rr.rx_id)
       motor_rr.read(can1.rx_data, stamp_ms);
+    else if (can1.rx_id == rammer_motor.rx_id)
+      rammer_motor.read(can1.rx_data, stamp_ms);  // 拨弹盘任务(M2006)的 0x205
     // 其它 ID（超电 0x301/0x302、将来云台等）在这里按需接进来，当前直接丢弃
   }
 }
